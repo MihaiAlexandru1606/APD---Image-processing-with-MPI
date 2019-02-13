@@ -1,0 +1,199 @@
+______                                   __       ______  ____    ____
+/\__  _\                                /'__`\    /\  _  \/\  _`\ /\  _`\
+\/_/\ \/    __    ___ ___      __      /\_\L\ \   \ \ \L\ \ \ \L\ \ \ \/\ \
+   \ \ \  /'__`\/' __` __`\  /'__`\    \/_/_\_<_   \ \  __ \ \ ,__/\ \ \ \ \
+    \ \ \/\  __//\ \/\ \/\ \/\ \L\.\_    /\ \L\ \   \ \ \/\ \ \ \/  \ \ \_\ \
+     \ \_\ \____\ \_\ \_\ \_\ \__/.\_\   \ \____/    \ \_\ \_\ \_\   \ \____/
+      \/_/\/____/\/_/\/_/\/_/\/__/\/_/    \/___/      \/_/\/_/\/_/    \/___/
+
+---------------------  Algoritmi Paraleli si Distribuiti -----------------------
+
+Tema 3 :  Image processing with MPI
+Nume : Niculescu
+Prenume : Mihai Alexandru
+Grupa : 335CB
+Sistem de operare : Ubuntu 18.04 LTS 64bit
+Editor : CLion
+Fisiere : homework.c Readme
+
+--------------------------------------------------------------------------------
+
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< Structura Temei  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    Pentru citirea, initializare, primirea datelor si determinarea ce urmeza sa
+fie prelucrat de fiecare proces sunt functile : calcul_limit, readImage.
+    Pentru scrierea imagini : writeImage
+    Pentru aplicare filtrelor de catre ficare proces : apply_filter.
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  Algoritm   >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    O imagine este impartita in imagini, bucati, ficare avant aceiasi latime,
+se imparte height. Cum la aplicare unui filtru "borderoul" ramane neschimbat,
+si pentru a aplica un filtru trebui sa stim valorile pentru fiecare vecin al
+pixelui se va adauga si marginile up/down in functie de id-ul procesului.
+
+    Exemplu:
+   *) Imagine :
+   +-----+-----+-----+-----+
+   | p00 | p01 | p02 | p03 |
+   +-----+-----+-----+-----+
+   | p10 | p11 | p12 | p13 |
+   +-----+-----+-----+-----+
+   | p20 | p21 | p22 | p23 |
+   +-----+-----+-----+-----+
+   | p30 | p31 | p32 | p33 |
+   +-----+-----+-----+-----+
+   | p40 | p41 | p42 | p43 |
+   +-----+-----+-----+-----+
+   | p50 | p51 | p52 | p53 |
+   +-----+-----+-----+-----+
+   | p60 | p61 | p62 | p63 |
+   +-----+-----+-----+-----+
+   | p70 | p71 | p72 | p73 |
+   +-----+-----+-----+-----+
+
+   Si 4 procese, dupa distribuire, pixeli care urmeza sa fie procesați de un
+proces sunt:
+   Proces 0:
+   +-----+-----+-----+-----+
+   | p00 | p01 | p02 | p03 |
+   +-----+-----+-----+-----+
+   | p10 | p11 | p12 | p13 |
+   +-----+-----+-----+-----+
+
+    Proces 1:
+   +-----+-----+-----+-----+
+   | p20 | p21 | p22 | p23 |
+   +-----+-----+-----+-----+
+   | p30 | p31 | p32 | p33 |
+   +-----+-----+-----+-----+
+
+    Proces 2:
+   +-----+-----+-----+-----+
+   | p40 | p41 | p42 | p43 |
+   +-----+-----+-----+-----+
+   | p50 | p51 | p52 | p53 |
+   +-----+-----+-----+-----+
+
+    Proces 3:
+   +-----+-----+-----+-----+
+   | p60 | p61 | p62 | p63 |
+   +-----+-----+-----+-----+
+   | p70 | p71 | p72 | p73 |
+   +-----+-----+-----+-----+
+
+    Cum pentru a aplica un filtru pentru p21 avem nevoie de valorile din p1,
+adăugam acel vector la matrice( l-am numit up), si pentru p31 valorile din p4,
+adugam si acel vector(l-am numit down). Rezulta
+   Proces 0:
+   +-----+-----+-----+-----+
+   | p00 | p01 | p02 | p03 |
+   +-----+-----+-----+-----+
+   | p10 | p11 | p12 | p13 |
+   +-----+-----+-----+-----+
+   | p20 | p21 | p22 | p23 | // down
+   +-----+-----+-----+-----+
+
+
+    Proces 1:
+   +-----+-----+-----+-----+
+   | p10 | p11 | p12 | p13 | // up
+   +-----+-----+-----+-----+
+   | p20 | p21 | p22 | p23 |
+   +-----+-----+-----+-----+
+   | p30 | p31 | p32 | p33 |
+   +-----+-----+-----+-----+
+   | p40 | p41 | p42 | p43 | // down
+   +-----+-----+-----+-----+
+
+    Proces 2:
+   +-----+-----+-----+-----+
+   | p30 | p31 | p32 | p33 | // up
+   +-----+-----+-----+-----+
+   | p40 | p41 | p42 | p43 |
+   +-----+-----+-----+-----+
+   | p50 | p51 | p52 | p53 |
+   +-----+-----+-----+-----+
+   | p60 | p61 | p62 | p63 | // down
+   +-----+-----+-----+-----+
+
+    Proces 3:
+   +-----+-----+-----+-----+
+   | p50 | p51 | p52 | p53 | // up
+   +-----+-----+-----+-----+
+   | p60 | p61 | p62 | p63 |
+   +-----+-----+-----+-----+
+   | p70 | p71 | p72 | p73 |
+   +-----+-----+-----+-----+
+
+    Cand aplicam un filtru marginile nu se schimba. Dupa aplicare unui filtru,
+trebui sa actualizam vectorii up si down. Pentru up : un proces cu rank = id, va
+trimite vectorul matrix[h - 2] la procesul  cu rank = id + 1, si va primi de la
+procesul rank = id - 1, in matrix[0], exiceptie facand ROOT si procesul cu rank
+= nrProces - 1, ei fiind drena si sursa( ROOT doar trimite, iar celalt doar
+primeste). Pentru down : un proces cu rank = id, va trimite vectorul matrix[1]
+la procesul  cu rank = id - 1, si va primi de la procesul rank = id + 1, in
+vectorul matrix[h - 1], exceptie facand ROOT (sursa) si procesul cu rank =
+nrProces - 1 (drena).
+
+    La final se trimite catre ROOT pixeleli, in afara de cei din up si down,
+care scrie imaginea calculata.
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+ Citirea paralela din fisier.
+
+/**
+ * citirea este facuta de fiecare proces in parte
+ * @param infoProcess
+ * @param fileName
+ */
+static void readImage(Info *infoProcess, const char *fileName) {
+    FILE *input = fopen(fileName, "rb");
+    assert(input != NULL);
+    char type[3];
+    int maxval;
+
+    assert(fscanf(input, "%s", type) == 1);
+    infoProcess->img.typeImage = type[1] - '0';
+    assert(fscanf(input, "%u %u", &infoProcess->img.width,
+                  &infoProcess->img.height) == 2);
+    assert(fscanf(input, "%d", &maxval) == 1);
+    fseek(input, 1, SEEK_CUR); /** Evitarea '\n' */
+
+    calcul_limit(infoProcess);
+
+    /**  alocare memorie, citirea datelor */
+    /*** hoo, hoo, mos craciun **/
+    int len = infoProcess->end - infoProcess->start + 1;
+    size_t sizePixel;
+    if (infoProcess->img.typeImage == grayscale) {
+        sizePixel = sizeof(PixelGray);
+    } else if (infoProcess->img.typeImage == color) {
+        sizePixel = sizeof(PixelColor);
+    } else exit(EXIT_FAILURE);
+
+    long __offset = infoProcess->start * infoProcess->img.width * sizePixel;
+    fseek(input, __offset, SEEK_CUR);
+
+    unsigned char **matrix;
+    matrix = malloc(sizeof(void *) * len);
+    assert(matrix != NULL);
+    for (int i = 0; i < len; i++) {
+        matrix[i] = malloc(infoProcess->img.width * sizePixel);
+        assert(matrix[i] != NULL);
+    }
+
+    for (int i = 0; i < len; i++) {
+        assert(fread(matrix[i], sizePixel, infoProcess->img.width, input) ==
+               infoProcess->img.width);
+    }
+    infoProcess->img.matrix = matrix;
+
+    assert(fclose(input) == 0);
+}
+
+
